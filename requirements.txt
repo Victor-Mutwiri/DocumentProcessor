@@ -1,0 +1,15 @@
+flask>=3.0.3
+python-dotenv>=1.0.1
+groq>=0.13.0
+langchain>=0.1.0
+langchain-community>=0.0.24
+langchain-core>=0.1.30
+langchain-groq>=0.0.1
+langchain-huggingface>=0.0.10
+pypdf>=5.1.0
+faiss-cpu==1.9.0
+rank-bm25>=0.2.2
+python-multipart>=0.0.19
+numpy>=1.24.0
+sentence-transformers>=2.5.1
+gunicorn>=21.2.0

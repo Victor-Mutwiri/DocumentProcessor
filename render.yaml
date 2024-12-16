@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ai-document-assistant
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: FLASK_SECRET_KEY
+        sync: false 
