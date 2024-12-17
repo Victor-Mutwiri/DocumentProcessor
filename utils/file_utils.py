@@ -29,14 +29,14 @@ def save_files_metadata(metadata: List[Dict]):
     with open(FILES_METADATA_PATH, 'w') as f:
         json.dump(metadata, f)
 
-def add_file_metadata(filename: str, filepath: str):
+def add_file_metadata(filename: str, filepath: str, active: bool = False):
     """Add metadata for a new file."""
     metadata = get_files_metadata()
     metadata.append({
         'filename': filename,
         'filepath': filepath,
         'uploaded_at': datetime.now().isoformat(),
-        'active': False
+        'active': active
     })
     save_files_metadata(metadata)
 

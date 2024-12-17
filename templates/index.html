@@ -3,19 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Document Assistant</title>
+    <title>Legal Document Assistant</title>
     <link
       href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
       rel="stylesheet"
     />
+    <style>
+      .legal-term {
+        background-color: #e5f3ff;
+        padding: 0 2px;
+        border-radius: 2px;
+      }
+      .risk-highlight {
+        background-color: #ffe5e5;
+        padding: 0 2px;
+        border-radius: 2px;
+      }
+      .clause-highlight {
+        background-color: #e5ffe5;
+        padding: 0 2px;
+        border-radius: 2px;
+      }
+    </style>
   </head>
   <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
-      <h1 class="text-3xl font-bold mb-8 text-center">AI Document Assistant</h1>
+      <h1 class="text-3xl font-bold mb-5 text-center">
+        Legal Document Assistant
+      </h1>
 
-      <!-- Current Files Section -->
+      <!-- Document Analysis Panel -->
       <div class="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h2 class="text-xl font-semibold mb-4">Current Files</h2>
+        <h2 class="text-xl font-semibold mb-4">Document Analysis</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Document Summary -->
+          <div class="border rounded p-4">
+            <h3 class="font-semibold mb-2">Document Summary</h3>
+            <div id="documentSummary" class="text-sm space-y-2">
+              <p class="text-gray-500">Select a document to view its summary</p>
+            </div>
+          </div>
+
+          <!-- Risk Analysis -->
+          <div class="border rounded p-4">
+            <h3 class="font-semibold mb-2">Risk Analysis</h3>
+            <div id="riskAnalysis" class="text-sm space-y-2">
+              <p class="text-gray-500">
+                Select a document to view risk analysis
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Files Section with Enhanced Features -->
+      <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h2 class="text-xl font-semibold mb-3">Current Files</h2>
         <div class="space-y-4" id="filesList">
           {% for file in files %}
           <div
@@ -36,14 +79,52 @@
               />
               <span>{{ file.filename }}</span>
             </div>
-            <button
-              onclick="deleteFile('{{ file.filename }}')"
-              class="text-red-500 hover:text-red-700"
-            >
-              Delete
-            </button>
+            <div class="flex space-x-2">
+              <button
+                onclick="viewSummary('{{ file.filename }}')"
+                class="text-blue-500 hover:text-blue-700"
+              >
+                Summary
+              </button>
+              <button
+                onclick="compareDocuments('{{ file.filename }}')"
+                class="text-green-500 hover:text-green-700"
+              >
+                Compare
+              </button>
+              <button
+                onclick="deleteFile('{{ file.filename }}')"
+                class="text-red-500 hover:text-red-700"
+              >
+                Delete
+              </button>
+            </div>
           </div>
           {% endfor %}
+        </div>
+      </div>
+
+      <!-- Document Comparison Modal -->
+      <div
+        id="comparisonModal"
+        class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
+      >
+        <div
+          class="relative top-20 mx-auto p-5 border w-4/5 shadow-lg rounded-md bg-white"
+        >
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">Document Comparison</h3>
+            <button
+              onclick="closeComparisonModal()"
+              class="text-gray-500 hover:text-gray-700"
+            >
+              &times;
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div id="document1" class="border p-4 h-96 overflow-y-auto"></div>
+            <div id="document2" class="border p-4 h-96 overflow-y-auto"></div>
+          </div>
         </div>
       </div>
 
@@ -84,9 +165,37 @@
         </form>
       </div>
 
-      <!-- Chat Section -->
+      <!-- Enhanced Chat Section -->
       <div class="bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-xl font-semibold mb-4">Chat with Documents</h2>
+        <h2 class="text-xl font-semibold mb-4">Legal Document Assistant</h2>
+        <div class="mb-4">
+          <div class="flex space-x-2 mb-4">
+            <button
+              onclick="setQueryTemplate('summary')"
+              class="bg-blue-100 px-3 py-1 rounded hover:bg-blue-200"
+            >
+              📄 Summary
+            </button>
+            <button
+              onclick="setQueryTemplate('obligations')"
+              class="bg-blue-100 px-3 py-1 rounded hover:bg-blue-200"
+            >
+              ✓ Obligations
+            </button>
+            <button
+              onclick="setQueryTemplate('risks')"
+              class="bg-blue-100 px-3 py-1 rounded hover:bg-blue-200"
+            >
+              ⚠️ Risks
+            </button>
+            <button
+              onclick="setQueryTemplate('dates')"
+              class="bg-blue-100 px-3 py-1 rounded hover:bg-blue-200"
+            >
+              📅 Key Dates
+            </button>
+          </div>
+        </div>
         <div
           id="chatMessages"
           class="space-y-4 mb-4 h-96 overflow-y-auto"
@@ -96,7 +205,7 @@
             type="text"
             id="messageInput"
             class="flex-1 border rounded px-4 py-2"
-            placeholder="Type your message..."
+            placeholder="Ask about the legal documents..."
           />
           <button
             type="submit"
@@ -206,7 +315,23 @@
         messageElement.className = `p-4 rounded ${
           sender === "You" ? "bg-blue-100" : "bg-green-100"
         }`;
-        messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+
+        // Highlight legal terms and risks
+        let formattedMessage = message
+          .replace(
+            /shall|must|will|agreement|contract|party|parties/gi,
+            (match) => `<span class="legal-term">${match}</span>`
+          )
+          .replace(
+            /risk|liability|penalty|terminate|breach/gi,
+            (match) => `<span class="risk-highlight">${match}</span>`
+          )
+          .replace(
+            /clause|section|article|provision/gi,
+            (match) => `<span class="clause-highlight">${match}</span>`
+          );
+
+        messageElement.innerHTML = `<strong>${sender}:</strong> ${formattedMessage}`;
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
@@ -243,6 +368,42 @@
         } catch (error) {
           alert("Error toggling file");
         }
+      }
+
+      function viewSummary(filename) {
+        fetch(`/document-summary/${filename}`)
+          .then((response) => response.json())
+          .then((data) => {
+            document.getElementById("documentSummary").innerHTML = data.summary;
+            document.getElementById("riskAnalysis").innerHTML = data.risks;
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
+
+      function compareDocuments(filename) {
+        const modal = document.getElementById("comparisonModal");
+        modal.classList.remove("hidden");
+        // Implementation for document comparison...
+      }
+
+      function closeComparisonModal() {
+        document.getElementById("comparisonModal").classList.add("hidden");
+      }
+
+      function setQueryTemplate(type) {
+        const input = document.getElementById("messageInput");
+        const templates = {
+          summary:
+            "Please provide a summary of the key points in this document.",
+          obligations:
+            "What are the main obligations and responsibilities in this document?",
+          risks: "What are the potential risks and red flags in this document?",
+          dates:
+            "What are the important dates and deadlines mentioned in this document?",
+        };
+        input.value = templates[type] || "";
       }
     </script>
   </body>
