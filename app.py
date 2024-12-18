@@ -26,6 +26,12 @@ create_upload_folder(app.config['UPLOAD_FOLDER'])
 @app.route('/')
 def index():
     files = get_files_metadata()
+    
+    # If there are files but none are active, set the first one as active
+    if files and not any(file.get('active') for file in files):
+        files[0]['active'] = True
+        save_files_metadata(files)
+        
     return render_template('index.html', files=files)
 
 @app.route('/upload', methods=['POST'])
@@ -84,19 +90,28 @@ def chat():
     try:
         # Debug logging
         print("Chat request received")
-        print(f"Active files: {document_processor.active_files}")
-        print(f"Document chunks: {len(document_processor.document_chunks)}")
-        print(f"Has embeddings: {document_processor.chunk_embeddings is not None}")
-        print(f"Has index: {document_processor.index is not None}")
         
-        # Get active files from metadata
+        # Get active files based on selection
         metadata = get_files_metadata()
-        active_files = [file['filepath'] for file in metadata if file.get('active')]
+        if data.get('document'):  # If specific document is selected
+            active_files = [file['filepath'] for file in metadata 
+                          if file['filename'] == data['document']]
+            print(f"Selected document: {data['document']}")
+        else:  # Use all active documents
+            active_files = [file['filepath'] for file in metadata 
+                          if file.get('active')]
+            
+        print(f"Active files: {active_files}")
         
-        # If we have active files but no processed documents, try processing again
-        if active_files and not document_processor.document_chunks:
-            print("Reprocessing active files")
-            document_processor.process_documents(active_files)
+        if not active_files:
+            return jsonify({'error': 'No active documents selected'}), 400
+
+        # Process documents if needed
+        if not document_processor.document_chunks:
+            print("Processing selected documents")
+            success = document_processor.process_documents(active_files)
+            if not success:
+                return jsonify({'error': 'Failed to process documents'}), 500
 
         response = document_processor.chat_with_documents(data['message'])
         return jsonify({'response': response})
@@ -145,25 +160,72 @@ def toggle_active(filename):
 @app.route('/document-summary/<filename>', methods=['GET'])
 def get_document_summary(filename):
     try:
+        print(f"Summary requested for: {filename}")  # Debug log
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
         if not os.path.exists(filepath):
+            print(f"File not found: {filepath}")  # Debug log
             return jsonify({'error': 'File not found'}), 404
 
         # Get summary from document processor
         summary = document_processor.get_document_summary(filepath)
-        if not summary or 'summary' not in summary:
+        
+        if not summary:
+            print("No summary generated")  # Debug log
             return jsonify({'error': 'Failed to generate summary'}), 500
+            
+        if 'summary' not in summary:
+            print("Summary missing from response")  # Debug log
+            return jsonify({'error': 'Invalid summary format'}), 500
         
         # Extract risks from summary
         risks = [line for line in summary['summary'].split('\n') 
                 if 'risk' in line.lower() or 'flag' in line.lower()]
         
-        return jsonify({
+        response_data = {
             'summary': summary['summary'],
             'risks': '<br>'.join(risks) if risks else 'No significant risks identified.'
-        })
+        }
+        
+        print("Successfully generated summary response")  # Debug log
+        return jsonify(response_data)
+        
     except Exception as e:
         print(f"Error generating summary: {str(e)}")  # Debug log
+        import traceback
+        traceback.print_exc()  # Print full stack trace
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/set-active-document', methods=['POST'])
+def set_active_document():
+    try:
+        data = request.json
+        if not data or 'filename' not in data:
+            return jsonify({'error': 'No filename provided'}), 400
+
+        metadata = get_files_metadata()
+        
+        # Set all documents as inactive first
+        for file in metadata:
+            file['active'] = False
+            
+        # Set the selected document as active
+        for file in metadata:
+            if file['filename'] == data['filename']:
+                file['active'] = True
+                break
+        
+        save_files_metadata(metadata)
+        
+        # Process the active document
+        active_filepath = next((file['filepath'] for file in metadata if file['active']), None)
+        if active_filepath:
+            document_processor.clear_document_state()
+            document_processor.process_documents([active_filepath])
+            
+        return jsonify({'message': 'Active document updated successfully'})
+    except Exception as e:
+        print(f"Error setting active document: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

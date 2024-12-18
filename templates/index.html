@@ -75,7 +75,7 @@
                 %}checked{%
                 endif
                 %}
-                onchange="toggleActive('{{ file.filename }}')"
+                data-filename="{{ file.filename }}"
               />
               <span>{{ file.filename }}</span>
             </div>
@@ -168,6 +168,30 @@
       <!-- Enhanced Chat Section -->
       <div class="bg-white p-6 rounded-lg shadow-md">
         <h2 class="text-xl font-semibold mb-4">Legal Document Assistant</h2>
+
+        <!-- Document Selection Dropdown -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2"
+            >Select Document to Query:</label
+          >
+          <select id="documentSelector" class="w-full p-2 border rounded mb-4">
+            <option value="">All Active Documents</option>
+            {% for file in files %}
+            <option
+              value="{{ file.filename }}"
+              {%
+              if
+              file.active
+              %}selected{%
+              endif
+              %}
+            >
+              {{ file.filename }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
         <div class="mb-4">
           <div class="flex space-x-2 mb-4">
             <button
@@ -287,6 +311,8 @@
           e.preventDefault();
           const messageInput = document.getElementById("messageInput");
           const message = messageInput.value.trim();
+          const selectedDocument =
+            document.getElementById("documentSelector").value;
 
           if (!message) return;
 
@@ -300,7 +326,10 @@
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ message }),
+              body: JSON.stringify({
+                message,
+                document: selectedDocument, // Send selected document to backend
+              }),
             });
             const data = await response.json();
             addMessageToChat("AI", data.response || data.error);
@@ -354,31 +383,39 @@
         }
       }
 
-      async function toggleActive(filename) {
-        try {
-          const response = await fetch(`/toggle-active/${filename}`, {
-            method: "POST",
-          });
-          const data = await response.json();
-          if (data.message) {
-            location.reload();
-          } else {
-            alert(data.error || "Error toggling file");
-          }
-        } catch (error) {
-          alert("Error toggling file");
-        }
-      }
-
       function viewSummary(filename) {
+        // Show loading state
+        document.getElementById("documentSummary").innerHTML =
+          "Loading summary...";
+        document.getElementById("riskAnalysis").innerHTML = "Loading risks...";
+
         fetch(`/document-summary/${filename}`)
-          .then((response) => response.json())
+          .then((response) => {
+            if (!response.ok) {
+              return response.json().then((err) => {
+                throw new Error(err.error || "Failed to fetch summary");
+              });
+            }
+            return response.json();
+          })
           .then((data) => {
-            document.getElementById("documentSummary").innerHTML = data.summary;
-            document.getElementById("riskAnalysis").innerHTML = data.risks;
+            if (data.error) {
+              throw new Error(data.error);
+            }
+            document.getElementById("documentSummary").innerHTML = data.summary
+              ? data.summary.replace(/\n/g, "<br>")
+              : "No summary available";
+            document.getElementById("riskAnalysis").innerHTML = data.risks
+              ? data.risks
+              : "No risks identified";
           })
           .catch((error) => {
             console.error("Error:", error);
+            document.getElementById("documentSummary").innerHTML = `Error: ${
+              error.message || "Failed to load summary"
+            }`;
+            document.getElementById("riskAnalysis").innerHTML =
+              "Error loading risks";
           });
       }
 
@@ -404,6 +441,75 @@
             "What are the important dates and deadlines mentioned in this document?",
         };
         input.value = templates[type] || "";
+      }
+
+      document
+        .getElementById("documentSelector")
+        .addEventListener("change", async function (e) {
+          const selectedFilename = e.target.value;
+
+          try {
+            const metadata = JSON.parse(
+              localStorage.getItem("files_metadata") || "[]"
+            );
+            const response = await fetch(`/set-active-document`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                filename: selectedFilename,
+              }),
+            });
+
+            const data = await response.json();
+            if (data.message) {
+              // Update UI to reflect the change
+              document
+                .querySelectorAll(".file-checkbox")
+                .forEach((checkbox) => {
+                  checkbox.checked = false; // Reset all checkboxes since they're now for deletion only
+                });
+            } else {
+              console.error(data.error || "Error setting active document");
+            }
+          } catch (error) {
+            console.error("Error:", error);
+          }
+        });
+
+      // Add new delete selected files functionality
+      function deleteSelectedFiles() {
+        const selectedFiles = Array.from(
+          document.querySelectorAll(".file-checkbox:checked")
+        ).map((checkbox) => checkbox.dataset.filename);
+
+        if (selectedFiles.length === 0) {
+          alert("Please select files to delete");
+          return;
+        }
+
+        if (
+          !confirm(
+            `Are you sure you want to delete ${selectedFiles.length} file(s)?`
+          )
+        )
+          return;
+
+        Promise.all(
+          selectedFiles.map((filename) =>
+            fetch(`/delete/${filename}`, { method: "POST" }).then((response) =>
+              response.json()
+            )
+          )
+        )
+          .then(() => {
+            location.reload();
+          })
+          .catch((error) => {
+            alert("Error deleting files");
+            console.error(error);
+          });
       }
     </script>
   </body>

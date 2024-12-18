@@ -39,70 +39,76 @@ class DocumentProcessor:
         self.active_files = set()
 
     def get_document_summary(self, file_path: str) -> Dict:
-        """Generate a comprehensive summary of a legal document."""
-        if file_path.endswith('.pdf'):
+        """Generate an intelligent legal analysis of the document."""
+        try:
+            if not file_path.endswith('.pdf'):
+                raise ValueError("Only PDF files are supported")
+
+            print(f"Generating analysis for: {file_path}")
+            
             with open(file_path, 'rb') as file:
                 pdf = PdfReader(file)
                 text = ''
                 for page in pdf.pages:
                     text += page.extract_text()
+                
+                if not text.strip():
+                    raise ValueError("No text could be extracted from the PDF")
 
-            prompt = """You are an expert legal assistant with extensive experience in various types of legal documents. Please provide a comprehensive analysis of this legal document following these steps:
+                # Use smaller chunks for better token management
+                max_chunk_size = 2500  # Reduced size for better token control
+                chunks = [text[i:i + max_chunk_size] for i in range(0, len(text), max_chunk_size)]
+                print(f"Analyzing document in {len(chunks)} segments")
 
-            1. Document Identification and Classification:
-               - Identify the type of legal document (e.g., contract, court ruling, legislation, brief, etc.)
-               - State the jurisdiction and governing law (if applicable)
-               - Identify the date and relevant timeline
+                summaries = []
+                for i, chunk in enumerate(chunks):
+                    chunk_prompt = f"""As an expert legal analyst, examine this document segment and provide crucial insights. 
+                    This is segment {i+1} of {len(chunks)}.
 
-            2. Key Participants and Roles:
-               - List all relevant parties, entities, or institutions involved
-               - Describe their respective roles and relationships
-               - Identify the authority issuing the document (if applicable)
+                    Document Text:
+                    {chunk}
 
-            3. Core Content Analysis:
-               - Main purpose or objective of the document
-               - Key findings, decisions, or determinations
-               - Critical arguments or reasoning presented
-               - Essential terms or conditions
-               - Monetary values or financial implications (if any)
+                    Analyze this segment with strategic focus on:
+                    - Key legal principles and their implications
+                    - Critical factual or procedural elements
+                    - Strategic considerations and potential impacts
+                    
+                    Focus on what's most significant in this segment, adapting your analysis to the document's nature and context.
+                    Be concise but thorough, highlighting only what's truly important."""
 
-            4. Legal Implications:
-               - Binding obligations created
-               - Rights granted or restricted
-               - Precedents cited or established
-               - Jurisdictional implications
-               - Enforcement mechanisms
+                    print(f"Processing segment {i+1}/{len(chunks)}")
+                    response = self.llm.invoke(chunk_prompt)
+                    summaries.append(response.content)
 
-            5. Critical Elements:
-               - Deadlines, time limits, or important dates
-               - Prerequisites or conditions
-               - Compliance requirements
-               - Procedural requirements
-               - Required actions or next steps
+                # Synthesize the analysis with a strategic focus
+                synthesis_prompt = """Synthesize these analytical segments into a strategic legal intelligence brief:
 
-            6. Risk Assessment:
-               - Potential legal risks or vulnerabilities
-               - Compliance challenges
-               - Enforcement risks
-               - Potential conflicts or ambiguities
-               - Missing or inadequate provisions
+                Previous Analyses:
+                {}
 
-            7. Recommendations and Notes:
-               - Key points requiring attention
-               - Suggested actions or responses
-               - Areas requiring clarification
-               - Additional considerations
+                Provide an executive-level analysis that:
+                1. Identifies the document's strategic significance and core implications
+                2. Highlights critical elements requiring attention or action
+                3. Outlines potential opportunities, risks, and strategic considerations
+                4. Provides context-aware, actionable insights
 
-            Document text:
-            {text}
+                Focus on delivering practical, strategic value while maintaining analytical rigor.""".format(
+                    "\n---\n".join(summaries[:3])  # Limit to prevent token overflow
+                )
 
-            Please provide a clear, structured analysis that focuses on the most relevant aspects for this specific type of legal document. Highlight any unusual or particularly significant elements."""
+                final_response = self.llm.invoke(synthesis_prompt)
+                
+                print("Analysis complete")
+                return {
+                    'summary': final_response.content,
+                    'file_path': file_path
+                }
 
-            response = self.llm.invoke(prompt.format(text=text))
-            return {
-                'summary': response.content,
-                'file_path': file_path
-            }
+        except Exception as e:
+            print(f"Error in document analysis: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def process_documents(self, file_paths: List[str]):
         """Optimized document processing with reduced token usage."""
