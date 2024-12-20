@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ from datetime import datetime
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -34,7 +36,7 @@ def index():
         
     return render_template('index.html', files=files)
 
-@app.route('/upload', methods=['POST'])
+@app.route('/api/upload', methods=['POST'])
 def upload_files():
     if 'files' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
@@ -81,7 +83,7 @@ def upload_files():
         print(f"Error processing documents: {str(e)}")  # Debug log
         return jsonify({'error': str(e)}), 500
 
-@app.route('/chat', methods=['POST'])
+@app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json
     if not data or 'message' not in data:
@@ -119,7 +121,7 @@ def chat():
         print(f"Error in chat endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/delete/<filename>', methods=['POST'])
+@app.route('/api/delete/<filename>', methods=['POST'])
 def delete_file(filename):
     try:
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -134,7 +136,7 @@ def delete_file(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/toggle-active/<filename>', methods=['POST'])
+@app.route('/api/toggle-active/<filename>', methods=['POST'])
 def toggle_active(filename):
     try:
         metadata = get_files_metadata()
@@ -157,7 +159,7 @@ def toggle_active(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/document-summary/<filename>', methods=['GET'])
+@app.route('/api/document-summary/<filename>', methods=['GET'])
 def get_document_summary(filename):
     try:
         print(f"Summary requested for: {filename}")  # Debug log
@@ -196,7 +198,7 @@ def get_document_summary(filename):
         traceback.print_exc()  # Print full stack trace
         return jsonify({'error': str(e)}), 500
 
-@app.route('/set-active-document', methods=['POST'])
+@app.route('/api/set-active-document', methods=['POST'])
 def set_active_document():
     try:
         data = request.json
