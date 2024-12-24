@@ -1,6 +1,9 @@
 import os
-from typing import List, Dict
+import re
+from typing import List, Dict, Any
 import groq
+from sentence_transformers import CrossEncoder
+from sklearn.metrics.pairwise import cosine_similarity
 from langchain_groq import ChatGroq
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -29,6 +32,7 @@ class DocumentProcessor:
         self.bm25 = None
         self.index = None
         self.document_metadata = {}
+        self.processing_status = "Idle"
 
     def clear_document_state(self):
         """Clear all document-related state."""
@@ -37,6 +41,7 @@ class DocumentProcessor:
         self.bm25 = None
         self.index = None
         self.active_files = set()
+        self.processing_status = "Idle"
 
     def get_document_summary(self, file_path: str) -> Dict:
         """Generate an intelligent legal analysis of the document."""
@@ -62,7 +67,7 @@ class DocumentProcessor:
 
                 summaries = []
                 for i, chunk in enumerate(chunks):
-                    chunk_prompt = f"""As an expert legal analyst, examine this document segment and provide crucial insights. 
+                    chunk_prompt = f"""As an expert legal assistant, examine this document segment and provide crucial insights. 
                     This is segment {i+1} of {len(chunks)}.
 
                     Document Text:
@@ -113,6 +118,7 @@ class DocumentProcessor:
     def process_documents(self, file_paths: List[str]):
         """Optimized document processing with reduced token usage."""
         try:
+            self.processing_status = "Processing selected documents"
             print(f"Processing documents: {file_paths}")  # Debug log
             self.clear_document_state()
             self.active_files = set(file_paths)
@@ -139,6 +145,7 @@ class DocumentProcessor:
 
             if not all_text:
                 print("No text was extracted from documents")
+                self.processing_status = "No text extracted from documents"
                 return False
 
             print(f"Total text length: {sum(len(t) for t in all_text)}")  # Debug log
@@ -153,6 +160,7 @@ class DocumentProcessor:
 
             if not self.document_chunks:
                 print("No chunks created")
+                self.processing_status = "No chunks created"
                 return False
 
             # Create contextual chunks
@@ -187,13 +195,18 @@ class DocumentProcessor:
             self.bm25 = BM25Okapi(tokenized_chunks)
 
             print("Document processing completed successfully")  # Debug log
+            self.processing_status = "Document processing completed successfully"
             return True
 
         except Exception as e:
             print(f"Error in process_documents: {str(e)}")
             import traceback
             traceback.print_exc()  # Print full stack trace
+            self.processing_status = f"Error in process_documents: {str(e)}"
             return False
+
+    def get_processing_status(self):
+        return self.processing_status
 
     def chat_with_documents(self, query: str) -> str:
         try:
