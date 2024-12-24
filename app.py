@@ -229,6 +229,15 @@ def set_active_document():
     except Exception as e:
         print(f"Error setting active document: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/files', methods=['GET'])
+def get_uploaded_files():
+    try:
+        metadata = get_files_metadata()
+        return jsonify(metadata)
+    except Exception as e:
+        print(f"Error fetching files metadata: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 

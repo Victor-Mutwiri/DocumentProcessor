@@ -1,6 +1,9 @@
 import os
-from typing import List, Dict
+import re
+from typing import List, Dict, Any
 import groq
+from sentence_transformers import CrossEncoder
+from sklearn.metrics.pairwise import cosine_similarity
 from langchain_groq import ChatGroq
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -62,7 +65,7 @@ class DocumentProcessor:
 
                 summaries = []
                 for i, chunk in enumerate(chunks):
-                    chunk_prompt = f"""As an expert legal analyst, examine this document segment and provide crucial insights. 
+                    chunk_prompt = f"""As an expert legal assistant, examine this document segment and provide crucial insights. 
                     This is segment {i+1} of {len(chunks)}.
 
                     Document Text:
