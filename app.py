@@ -239,5 +239,15 @@ def get_uploaded_files():
         print(f"Error fetching files metadata: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# New endpoint to fetch the processing status
+@app.route('/api/processing-status', methods=['GET'])
+def get_processing_status():
+    try:
+        status = document_processor.get_processing_status()
+        return jsonify({'status': status})
+    except Exception as e:
+        print(f"Error fetching processing status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True) 
