@@ -11,6 +11,8 @@ from rank_bm25 import BM25Okapi
 import numpy as np
 import faiss
 from pypdf import PdfReader
+from docx import Document
+import win32com.client as win32
 
 class DocumentProcessor:
     def __init__(self):
@@ -141,6 +143,33 @@ class DocumentProcessor:
                                 print(f"No text extracted from {file_path}")
                     except Exception as e:
                         print(f"Error reading PDF {file_path}: {str(e)}")
+                        continue
+                elif file_path.endswith('.docx'):
+                    try:
+                        doc = Document(file_path)
+                        text = '\n'.join([para.text for para in doc.paragraphs])
+                        if text.strip():
+                            all_text.append(text)
+                            print(f"Successfully extracted text from {file_path} (length: {len(text)})")
+                        else:
+                            print(f"No text extracted from {file_path}")
+                    except Exception as e:
+                        print(f"Error reading DOCX {file_path}: {str(e)}")
+                        continue
+                elif file_path.endswith('.doc'):
+                    try:
+                        word = win32.Dispatch("Word.Application")
+                        doc = word.Documents.Open(file_path)
+                        text = doc.Content.Text
+                        doc.Close()
+                        word.Quit()
+                        if text.strip():
+                            all_text.append(text)
+                            print(f"Successfully extracted text from {file_path} (length: {len(text)})")
+                        else:
+                            print(f"No text extracted from {file_path}")
+                    except Exception as e:
+                        print(f"Error reading DOC {file_path}: {str(e)}")
                         continue
 
             if not all_text:

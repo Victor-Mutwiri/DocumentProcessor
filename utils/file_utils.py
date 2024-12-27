@@ -3,7 +3,7 @@ import json
 from typing import List, Dict
 from datetime import datetime
 
-ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 MAX_FILES = 3
 FILES_METADATA_PATH = 'uploads/files_metadata.json'
 
