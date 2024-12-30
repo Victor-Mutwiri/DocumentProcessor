@@ -9,6 +9,7 @@ from utils.file_utils import (
     add_file_metadata, remove_file, can_upload_more_files,
     save_files_metadata
 )
+from utils.auth_utilis import authenticate_user, register_user
 from datetime import datetime
 
 load_dotenv()
@@ -27,17 +28,43 @@ create_upload_folder(app.config['UPLOAD_FOLDER'])
 
 @app.route('/')
 def index():
-    files = get_files_metadata()
-    
-    # If there are files but none are active, set the first one as active
-    if files and not any(file.get('active') for file in files):
-        files[0]['active'] = True
-        save_files_metadata(files)
-        
-    return render_template('index.html', files=files)
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    files = get_files_metadata(session['user_id'])
+    return jsonify({'files': files})
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    data = request.json
+    name = data.get('name')
+    password = data.get('password')
+    user = authenticate_user(name, password)
+    if user:
+        session['user_id'] = user['id']
+        return jsonify({'message': 'Login successful'})
+    return jsonify({'error': 'Invalid credentials'}), 401
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    data = request.json
+    name = data.get('name')
+    password = data.get('password')
+    user = register_user(name, password)
+    if user:
+        session['user_id'] = user['id']
+        return jsonify({'message': 'Registration successful'})
+    return jsonify({'error': 'User already exists'}), 400
+
+@app.route('/logout')
+def logout():
+    session.pop('user_id', None)
+    return jsonify({'message': 'Logout successful'})
 
 @app.route('/api/upload', methods=['POST'])
 def upload_files():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
     if 'files' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
     
@@ -46,11 +73,11 @@ def upload_files():
     if len(files) > 3:
         return jsonify({'error': 'Maximum 3 files allowed'}), 400
 
-    if not can_upload_more_files():
+    if not can_upload_more_files(session['user_id']):
         return jsonify({'error': 'Maximum file limit reached. Delete some files first.'}), 400
 
     uploaded_files = []
-    metadata = get_files_metadata()
+    metadata = get_files_metadata(session['user_id'])
     
     # Deactivate all existing files
     for file in metadata:
@@ -66,7 +93,8 @@ def upload_files():
                 'filename': filename,
                 'filepath': filepath,
                 'uploaded_at': datetime.now().isoformat(),
-                'active': True
+                'active': True,
+                'user_id': session['user_id']
             })
         else:
             return jsonify({'error': 'Invalid file type'}), 400
@@ -232,8 +260,10 @@ def set_active_document():
     
 @app.route('/api/files', methods=['GET'])
 def get_uploaded_files():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
     try:
-        metadata = get_files_metadata()
+        metadata = get_files_metadata(session['user_id'])
         return jsonify(metadata)
     except Exception as e:
         print(f"Error fetching files metadata: {str(e)}")
