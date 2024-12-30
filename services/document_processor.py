@@ -5,12 +5,14 @@ import groq
 from sentence_transformers import CrossEncoder
 from sklearn.metrics.pairwise import cosine_similarity
 from langchain_groq import ChatGroq
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from rank_bm25 import BM25Okapi
 import numpy as np
 import faiss
 from pypdf import PdfReader
+from docx import Document
+import win32com.client as win32
 
 class DocumentProcessor:
     def __init__(self):
@@ -19,7 +21,7 @@ class DocumentProcessor:
             groq_api_key=self.groq_api_key,
             model_name="llama-3.3-70b-versatile"
         )
-        self.text_splitter = RecursiveCharacterTextSplitter(
+        self.text_splitter = CharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
         )
@@ -116,17 +118,16 @@ class DocumentProcessor:
             raise
 
     def process_documents(self, file_paths: List[str]):
-        """Optimized document processing with reduced token usage."""
         try:
             self.processing_status = "Processing selected documents"
-            print(f"Processing documents: {file_paths}")  # Debug log
+            print(f"Processing documents: {file_paths}")
             self.clear_document_state()
             self.active_files = set(file_paths)
 
             all_text = []
             
             for file_path in file_paths:
-                print(f"Processing file: {file_path}")  # Debug log
+                print(f"Processing file: {file_path}")
                 if file_path.endswith('.pdf'):
                     try:
                         with open(file_path, 'rb') as file:
@@ -134,7 +135,7 @@ class DocumentProcessor:
                             text = ''
                             for page in pdf.pages:
                                 text += page.extract_text()
-                            if text.strip():  # Check if we got any text
+                            if text.strip():
                                 all_text.append(text)
                                 print(f"Successfully extracted text from {file_path} (length: {len(text)})")
                             else:
@@ -142,28 +143,53 @@ class DocumentProcessor:
                     except Exception as e:
                         print(f"Error reading PDF {file_path}: {str(e)}")
                         continue
+                elif file_path.endswith('.docx'):
+                    try:
+                        doc = Document(file_path)
+                        text = '\n'.join([para.text for para in doc.paragraphs])
+                        if text.strip():
+                            all_text.append(text)
+                            print(f"Successfully extracted text from {file_path} (length: {len(text)})")
+                        else:
+                            print(f"No text extracted from {file_path}")
+                    except Exception as e:
+                        print(f"Error reading DOCX {file_path}: {str(e)}")
+                        continue
+                elif file_path.endswith('.doc'):
+                    try:
+                        word = win32.Dispatch("Word.Application")
+                        doc = word.Documents.Open(file_path)
+                        text = doc.Content.Text
+                        doc.Close()
+                        word.Quit()
+                        if text.strip():
+                            all_text.append(text)
+                            print(f"Successfully extracted text from {file_path} (length: {len(text)})")
+                        else:
+                            print(f"No text extracted from {file_path}")
+                    except Exception as e:
+                        print(f"Error reading DOC {file_path}: {str(e)}")
+                        continue
 
             if not all_text:
                 print("No text was extracted from documents")
                 self.processing_status = "No text extracted from documents"
                 return False
 
-            print(f"Total text length: {sum(len(t) for t in all_text)}")  # Debug log
+            print(f"Total text length: {sum(len(t) for t in all_text)}")
 
-            # Split documents into chunks
             self.document_chunks = []
             for text in all_text:
                 chunks = self.text_splitter.split_text(text)
                 self.document_chunks.extend(chunks)
 
-            print(f"Created {len(self.document_chunks)} chunks")  # Debug log
+            print(f"Created {len(self.document_chunks)} chunks")
 
             if not self.document_chunks:
                 print("No chunks created")
                 self.processing_status = "No chunks created"
                 return False
 
-            # Create contextual chunks
             contextual_chunks = []
             for i, chunk in enumerate(self.document_chunks):
                 context = f"Document chunk {i+1}: This section appears to contain information about "
@@ -177,31 +203,28 @@ class DocumentProcessor:
                 contextual_chunk = context + chunk
                 contextual_chunks.append(contextual_chunk)
 
-            print(f"Created {len(contextual_chunks)} contextual chunks")  # Debug log
+            print(f"Created {len(contextual_chunks)} contextual chunks")
 
-            # Generate embeddings
-            print("Generating embeddings...")  # Debug log
+            print("Generating embeddings...")
             embeddings = self.embeddings.embed_documents(contextual_chunks)
             self.chunk_embeddings = np.array(embeddings)
-            print(f"Generated embeddings with shape: {self.chunk_embeddings.shape}")  # Debug log
+            print(f"Generated embeddings with shape: {self.chunk_embeddings.shape}")
 
-            # Create FAISS index
             dimension = self.chunk_embeddings.shape[1]
             self.index = faiss.IndexFlatL2(dimension)
             self.index.add(self.chunk_embeddings)
 
-            # Create BM25 index
             tokenized_chunks = [chunk.split() for chunk in contextual_chunks]
             self.bm25 = BM25Okapi(tokenized_chunks)
 
-            print("Document processing completed successfully")  # Debug log
+            print("Document processing completed successfully")
             self.processing_status = "Document processing completed successfully"
             return True
 
         except Exception as e:
             print(f"Error in process_documents: {str(e)}")
             import traceback
-            traceback.print_exc()  # Print full stack trace
+            traceback.print_exc()
             self.processing_status = f"Error in process_documents: {str(e)}"
             return False
 
