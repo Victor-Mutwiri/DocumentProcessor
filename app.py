@@ -15,7 +15,7 @@ from datetime import datetime
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -33,7 +33,7 @@ def index():
     files = get_files_metadata(session['user_id'])
     return jsonify({'files': files})
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['POST'])
 def login():
     data = request.json
     name = data.get('name')
@@ -41,10 +41,11 @@ def login():
     user = authenticate_user(name, password)
     if user:
         session['user_id'] = user['id']
-        return jsonify({'message': 'Login successful'})
+        session['session_id'] = str(user['id'])  # Set session ID to user ID
+        return jsonify({'message': 'Login successful', 'session_id': session['session_id']})
     return jsonify({'error': 'Invalid credentials'}), 401
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['POST'])
 def register():
     data = request.json
     name = data.get('name')
@@ -52,16 +53,22 @@ def register():
     user = register_user(name, password)
     if user:
         session['user_id'] = user['id']
-        return jsonify({'message': 'Registration successful'})
+        session['session_id'] = str(user['id'])  # Set session ID to user ID
+        return jsonify({'message': 'Registration successful', 'session_id': session['session_id']})
     return jsonify({'error': 'User already exists'}), 400
 
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
+    session.pop('session_id', None)
     return jsonify({'message': 'Logout successful'})
 
 @app.route('/api/upload', methods=['POST'])
 def upload_files():
+    session_id = request.headers.get('Session-Id')
+    if session_id:
+        session['user_id'] = session_id
+        session['session_id'] = session_id
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
@@ -99,7 +106,7 @@ def upload_files():
         else:
             return jsonify({'error': 'Invalid file type'}), 400
 
-    save_files_metadata(metadata)
+    save_files_metadata(metadata, session['user_id'])
 
     # Process documents
     try:
@@ -111,63 +118,123 @@ def upload_files():
         print(f"Error processing documents: {str(e)}")  # Debug log
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/files', methods=['GET'])
+def get_uploaded_files():
+    session_id = request.headers.get('Session-Id')
+    if not session_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    # Directly set user_id to session_id for testing
+    session['user_id'] = session_id
+
+    try:
+        metadata = get_files_metadata(session['user_id'])
+        return jsonify({'files': metadata})
+    except Exception as e:
+        print(f"Error fetching files metadata: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+def get_user_id_from_session(session_id):
+    # Implement this function to retrieve the user_id from the session_id
+    return session.get('user_id') if session.get('session_id') == session_id else None
+
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json
     if not data or 'message' not in data:
         return jsonify({'error': 'No message provided'}), 400
 
+    session_id = request.headers.get('Session-Id')
+    if not session_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    # Set user_id based on session_id
+    session['user_id'] = session_id
+    user_id = session['user_id']
+
     try:
         # Debug logging
-        print("Chat request received")
-        
-        # Get active files based on selection
-        metadata = get_files_metadata()
-        if data.get('document'):  # If specific document is selected
-            active_files = [file['filepath'] for file in metadata 
-                          if file['filename'] == data['document']]
+        print(f"Chat request received from session_id: {session_id}")
+
+        # Fetch metadata for the user's files
+        metadata = get_files_metadata(user_id)
+        active_files = []
+
+        if 'document' in data and data['document']:
+            # If a specific document is selected
+            active_files = [file['filepath'] for file in metadata if file['filename'] == data['document']]
             print(f"Selected document: {data['document']}")
-        else:  # Use all active documents
-            active_files = [file['filepath'] for file in metadata 
-                          if file.get('active')]
-            
+        else:
+            # Use all active documents if no specific document is selected
+            active_files = [file['filepath'] for file in metadata if file.get('active')]
+
         print(f"Active files: {active_files}")
-        
+
         if not active_files:
             return jsonify({'error': 'No active documents selected'}), 400
 
-        # Process documents if needed
+        # Process documents if not already processed
         if not document_processor.document_chunks:
             print("Processing selected documents")
             success = document_processor.process_documents(active_files)
             if not success:
                 return jsonify({'error': 'Failed to process documents'}), 500
 
+        # Generate a response from the chat processor
         response = document_processor.chat_with_documents(data['message'])
         return jsonify({'response': response})
+
     except Exception as e:
         print(f"Error in chat endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+        
+
 @app.route('/api/delete/<filename>', methods=['POST'])
 def delete_file(filename):
+    session_id = request.headers.get('Session-Id')
+    if not session_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    # Set session variables like other endpoints
+    session['user_id'] = session_id
+    session['session_id'] = session_id
+
     try:
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         if os.path.exists(filepath):
             os.remove(filepath)
-        remove_file(filename)
-        # Clear document processor state if this was the last active file
-        metadata = get_files_metadata()
+            print(f"File {filename} removed from server.")
+
+        # Remove file from metadata using session['user_id']
+        remove_file(filename, session['user_id'])
+
+        # Clear document processor state if last active file
+        metadata = get_files_metadata(session['user_id'])
         if not any(file.get('active', False) for file in metadata):
             document_processor.clear_document_state()
+
         return jsonify({'message': 'File deleted successfully'})
+
     except Exception as e:
+        print(f"Error deleting file: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/toggle-active/<filename>', methods=['POST'])
 def toggle_active(filename):
+    session_id = request.headers.get('Session-Id')
+    if not session_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    session['user_id'] = session_id
+    session['session_id'] = session_id
+
     try:
-        metadata = get_files_metadata()
+        metadata = get_files_metadata(session['user_id'])
         active_files = []
         for file in metadata:
             if file['filename'] == filename:
@@ -176,9 +243,8 @@ def toggle_active(filename):
                     active_files.append(file['filepath'])
             else:
                 file['active'] = False
-        save_files_metadata(metadata)
+        save_files_metadata(metadata, session['user_id'])
         
-        # Process only active files
         if active_files:
             document_processor.process_documents(active_files)
         else:
@@ -258,16 +324,7 @@ def set_active_document():
         print(f"Error setting active document: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
-@app.route('/api/files', methods=['GET'])
-def get_uploaded_files():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    try:
-        metadata = get_files_metadata(session['user_id'])
-        return jsonify(metadata)
-    except Exception as e:
-        print(f"Error fetching files metadata: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+
 
 # New endpoint to fetch the processing status
 @app.route('/api/processing-status', methods=['GET'])
