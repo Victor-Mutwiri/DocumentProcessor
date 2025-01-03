@@ -1,12 +1,1 @@
-[
-    {
-        "id": 1,
-        "name": "user1",
-        "password": "password1"
-    },
-    {
-        "id": 2,
-        "name": "user2",
-        "password": "password2"
-    }
-]
+[{"id": 1, "name": "user1", "password": "password1"}, {"id": 2, "name": "user2", "password": "password2"}, {"id": 3, "name": "tester@gmail.com", "password": "scrypt:32768:8:1$RDo26tSipz2Yi2im$88c48b060807dce213cc50ef716d8c51707d9f4e1fd01af2b1043c17b01a0fa5944274fac3e4655fbfa65567a5a325217a4d6be2b8901abab7bd94f6794e3848"}]

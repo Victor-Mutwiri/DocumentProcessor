@@ -25,7 +25,7 @@ def get_files_metadata(user_id: int) -> List[Dict]:
             return [file for file in all_metadata if file['user_id'] == user_id]
     return []
 
-def save_files_metadata(metadata: List[Dict]):
+def save_files_metadata(metadata: List[Dict], user_id: int):
     """Save metadata of uploaded files."""
     if os.path.exists(FILES_METADATA_PATH):
         with open(FILES_METADATA_PATH, 'r') as f:
@@ -33,6 +33,10 @@ def save_files_metadata(metadata: List[Dict]):
     else:
         all_metadata = []
     
+    # Deactivate all files for the user
+    for file in all_metadata:
+        if file['user_id'] == user_id:
+            file['active'] = False
     # Update or add new metadata
     for file in metadata:
         for i, existing_file in enumerate(all_metadata):
@@ -56,12 +60,26 @@ def add_file_metadata(filename: str, filepath: str, user_id: int, active: bool =
         'user_id': user_id
     })
     save_files_metadata(metadata)
-
+    
+    
 def remove_file(filename: str, user_id: int):
     """Remove a file and its metadata."""
+    if os.path.exists(FILES_METADATA_PATH):
+        with open(FILES_METADATA_PATH, 'r') as f:
+            all_metadata = json.load(f)
+        
+        # Filter out the file to be removed
+        all_metadata = [m for m in all_metadata if not (m['filename'] == filename and m['user_id'] == user_id)]
+        
+        # Save the updated metadata
+        with open(FILES_METADATA_PATH, 'w') as f:
+            json.dump(all_metadata, f)
+
+""" def remove_file(filename: str, user_id: int):
+    Remove a file and its metadata.
     metadata = get_files_metadata(user_id)
     metadata = [m for m in metadata if m['filename'] != filename]
-    save_files_metadata(metadata)
+    save_files_metadata(metadata) """
 
 def can_upload_more_files(user_id: int) -> bool:
     """Check if more files can be uploaded."""
