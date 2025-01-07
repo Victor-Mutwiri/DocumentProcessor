@@ -21,7 +21,7 @@ class DocumentProcessor:
             groq_api_key=self.groq_api_key,
             model_name="llama-3.3-70b-versatile"
         )
-        self.text_splitter = CharacterTextSplitter(
+        self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
         )
