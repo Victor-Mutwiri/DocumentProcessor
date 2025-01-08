@@ -1,8 +1,10 @@
 import os
 import re
+import torch
 from typing import List, Dict, Any
 import groq
 from sentence_transformers import CrossEncoder
+from transformers import AutoTokenizer, AutoModel
 from sklearn.metrics.pairwise import cosine_similarity
 from langchain_groq import ChatGroq
 from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTextSplitter
@@ -13,6 +15,29 @@ import faiss
 from pypdf import PdfReader
 from docx import Document
 import win32com.client as win32
+
+class LegalBERTEmbeddings:
+    def __init__(self, model_name: str = "nlpaueb/legal-bert-base-uncased"):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name)
+
+    def embed_documents(self, documents: List[str]) -> List[List[float]]:
+        embeddings = []
+        for doc in documents:
+            inputs = self.tokenizer(doc, return_tensors="pt", padding=True, truncation=True, max_length=512)
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                # Use the [CLS] token embedding for document representation
+                cls_embedding = outputs.last_hidden_state[:, 0, :].squeeze().numpy()
+                embeddings.append(cls_embedding)
+        return embeddings
+
+    def embed_query(self, query: str) -> List[float]:
+        inputs = self.tokenizer(query, return_tensors="pt", padding=True, truncation=True, max_length=512)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            cls_embedding = outputs.last_hidden_state[:, 0, :].squeeze().numpy()
+        return cls_embedding
 
 class DocumentProcessor:
     def __init__(self):
@@ -25,9 +50,10 @@ class DocumentProcessor:
             chunk_size=1000,
             chunk_overlap=200
         )
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-mpnet-base-v2"
-        )
+        self.embeddings = LegalBERTEmbeddings()
+        """ self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-mpnet-base-v2" 
+        ) """
         self.active_files = set()
         self.document_chunks = []
         self.chunk_embeddings = None
