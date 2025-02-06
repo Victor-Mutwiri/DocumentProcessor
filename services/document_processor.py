@@ -45,15 +45,16 @@ class DocumentProcessor:
         self.llm = ChatGroq(
             groq_api_key=self.groq_api_key,
             model_name="llama-3.3-70b-versatile"
+            
         )
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
         )
-        self.embeddings = LegalBERTEmbeddings()
-        """ self.embeddings = HuggingFaceEmbeddings(
+        """ self.embeddings = LegalBERTEmbeddings() """
+        self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-mpnet-base-v2" 
-        ) """
+        )
         self.active_files = set()
         self.document_chunks = []
         self.chunk_embeddings = None

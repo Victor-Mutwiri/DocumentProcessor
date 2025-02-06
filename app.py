@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from flask_admin import Admin, BaseView, expose
+from flask_admin.contrib.sqla import ModelView
+from flask_sqlalchemy import SQLAlchemy
 import os
 from dotenv import load_dotenv
 from services.document_processor import DocumentProcessor
@@ -11,20 +14,60 @@ from utils.file_utils import (
 )
 from utils.auth_utilis import authenticate_user, register_user
 from datetime import datetime
+from models import db, User, Document
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
+CORS(app, supports_credentials=True)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///your_database.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db.init_app(app)
 
 # Initialize document processor
 document_processor = DocumentProcessor()
 
 # Create upload folder if it doesn't exist
 create_upload_folder(app.config['UPLOAD_FOLDER'])
+
+
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin in ["https://doc-processor-theta.vercel.app", "http://localhost:5173"]:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Session-Id'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
+
+
+# User management
+class UserAdminView(ModelView):
+    column_list = ['id', 'name', 'created_at', 'last_login', 'is_active', 'total_documents']
+    column_searchable_list = ['name']
+    column_filters = ['is_active', 'created_at']
+
+    def toggle_user_status(self, user_id):
+        user = User.query.get_or_404(user_id)
+        user.is_active = not user.is_active
+        db.session.commit()
+        return jsonify({'status': 'success', 'is_active': user.is_active})
+
+# Document management
+class DocumentAdminView(ModelView):
+    column_list = ['filename', 'user', 'uploaded_at', 'file_size', 'is_active', 'processing_status']
+    column_searchable_list = ['filename', 'user.name']
+    column_filters = ['is_active', 'uploaded_at', 'processing_status']
+
+# Register admin views
+admin = Admin(app, name='Document Processor Admin', template_mode='bootstrap4')
+admin.add_view(UserAdminView(User, db.session))
+admin.add_view(DocumentAdminView(Document, db.session))
 
 @app.route('/')
 def index():
