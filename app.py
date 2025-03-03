@@ -442,30 +442,30 @@ def register_routes(app):
     @app.route('/api/review-contract', methods=['POST'])
     def review_contract():
         session_id = request.headers.get('Session-Id')
+        print(f"Session ID received: {session_id}")
         if not session_id:
             return jsonify({'error': 'Unauthorized'}), 401
 
-        # Set session variables like other endpoints
+        # Set session variables
         session['user_id'] = session_id
         session['session_id'] = session_id
 
-        if 'files' not in request.files:
-            return jsonify({'error': 'No files provided'}), 400
+        # Retrieve the contract file metadata for the user
+        contract_metadata = get_contract_files_metadata(session['user_id'])
+        if not contract_metadata or len(contract_metadata) == 0:
+            return jsonify({'error': 'No contract file found for the user'}), 404
 
-        files = request.files.getlist('files')
-        file_paths = []
-
-        for file in files:
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['CONTRACT_FOLDER'], filename)
-                file.save(filepath)
-                file_paths.append(filepath)
-            else:
-                return jsonify({'error': 'Invalid file type'}), 400
+        # There should be only one contract file per user
+        contract_file = contract_metadata[0]
+        filepath = contract_file['filepath']
+        print(f"Checking file path: {filepath}")
+        
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
 
         try:
-            review = document_processor.review_contract(file_paths)
+            # Use your existing document processor to review the contract
+            review = document_processor.review_contract([filepath])
             return jsonify({'review': review})
         except Exception as e:
             print(f"Error reviewing contract: {str(e)}")
@@ -490,7 +490,7 @@ def register_routes(app):
             return jsonify({'error': 'Maximum 1 file allowed'}), 400
 
         if not can_upload_more_contract_files(session['user_id']):
-            return jsonify({'error': 'Maximum file limit reached. Delete some files first.'}), 400
+            return jsonify({'error': 'Maximum file limit reached. Delete the existing file first.'}), 400
 
         uploaded_files = []
         contractmetadata = get_contract_files_metadata(session['user_id'])  # Changed from get_files_metadata
