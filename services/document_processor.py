@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import torch
 from typing import List, Dict, Any
@@ -161,6 +162,13 @@ class EnhancedDocumentProcessor:
         self.chunk_embeddings = None
         self.index = None
         self.chunk_metadata = []
+        
+    def clear_document_state(self):
+        """Clear the document state."""
+        self.document_chunks = []
+        self.chunk_embeddings = None
+        self.index = None
+        self.chunk_metadata = []
 
     def process_documents(self, file_paths: List[str]) -> bool:
         try:
@@ -180,8 +188,11 @@ class EnhancedDocumentProcessor:
                                 'source': file_path,
                                 'type': 'pdf'
                             })
+                        else:
+                            print(f"No text extracted from page in {file_path}")
 
             if not all_text:
+                print("No valid text found in any of the documents.")
                 return False
 
             self.document_chunks = []
@@ -214,7 +225,35 @@ class EnhancedDocumentProcessor:
             print(f"Error in process_documents: {str(e)}")
             return False
 
-    def chat_with_documents(self, query: str) -> str:
+    
+    def save_chunks_to_json(self, user_id: int):
+        chunks_data = {
+            'document_chunks': self.document_chunks,
+            'chunk_metadata': self.chunk_metadata
+        }
+        with open('chunks/chunks_{user_id}.json','w') as f:
+            json.dump(chunks_data, f, indent=4)
+            
+    def load_chunks_from_json(self, user_id: int) -> bool:
+        try:
+            with open('chunks/chunks_{user_id}.json','r') as f:
+                chunks_data = json.load(f)
+                self.document_chunks = chunks_data['document_chunks']
+                self.chunk_metadata = chunks_data['chunk_metadata']
+                return True
+        except FileNotFoundError:
+            return False
+    
+    def delete_chunks_from_json(self, user_id: int):
+        try:
+            chunks_file = f'chunks/chunks_{user_id}.json'
+            if os.path.exists('chunks/chunks.json'):
+                os.remove('chunks/chunks.json')
+                print("Chunks deleted from {chunks_file}")
+        except Exception as e:
+            print(f"Error deleting chunks: {e}")
+
+    def chat_with_documents(self, query: str, user_id: int) -> str:
         try:
             if not self.document_chunks:
                 return "No documents have been processed yet."

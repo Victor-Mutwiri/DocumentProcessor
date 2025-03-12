@@ -257,7 +257,7 @@ def register_routes(app):
                     return jsonify({'error': 'Failed to process documents'}), 500
 
             # Generate a response from the chat processor
-            response = document_processor.chat_with_documents(data['message'])
+            response = document_processor.chat_with_documents(data['message'], user_id)
             return jsonify({'response': response})
 
         except Exception as e:
@@ -295,6 +295,7 @@ def register_routes(app):
         except Exception as e:
             print(f"Error deleting file: {str(e)}")
             return jsonify({'error': str(e)}), 500
+
         
     @app.route('/api/delete-contract/<filename>', methods=['POST'])
     def delete_contract(filename):
@@ -355,6 +356,7 @@ def register_routes(app):
             return jsonify({'message': 'File toggled successfully'})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
 
     @app.route('/api/document-summary/<filename>', methods=['GET'])
     def get_document_summary(filename):
