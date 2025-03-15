@@ -18,8 +18,11 @@ from datetime import datetime
 from models import db, User, Document
 from multiprocessing import freeze_support
 
+
+
+freeze_support()
+
 # Global variable for document processor
-app=None
 document_processor = None
 
 logging.basicConfig(level=logging.DEBUG)
@@ -56,11 +59,12 @@ def create_app():
 
     # Create upload folder if it doesn't exist
     create_upload_folder(app.config['UPLOAD_FOLDER'])
+    create_upload_folder(app.config['CONTRACT_FOLDER'])
 
     @app.after_request
     def after_request(response):
         origin = request.headers.get('Origin')
-        if origin in ["https://sheria.vimtec.co.ke", "http://localhost:5173"]:
+        if origin in ["https://sheria.vimtec.co.ke", "http://localhost:5173", "https://doc-processor-theta.vercel.app"]:
             response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Session-Id'
         response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
@@ -89,15 +93,6 @@ def create_app():
     return app
 
 def register_routes(app):
-    @app.after_request
-    def after_request(response):
-        origin = request.headers.get('Origin')
-        if origin in ["https://doc-processor-theta.vercel.app", "http://localhost:5173"]:
-            response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Session-Id'
-        response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        return response
 
     @app.route('/')
     def index():
@@ -558,11 +553,13 @@ def main():
     
     logger.info("Application created successfully, starting server")
     
-    if os.getenv('FLASK_ENV') == 'production':
+    """ if os.getenv('FLASK_ENV') == 'production':
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000)
     else:
-        app.run(debug=True, use_reloader=False)  # Disable reloader for debugging
+        app.run(debug=True, use_reloader=False) """
+        
+app = create_app()
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
