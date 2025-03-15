@@ -60,7 +60,7 @@ def create_app():
     @app.after_request
     def after_request(response):
         origin = request.headers.get('Origin')
-        if origin in ["https://doc-processor-theta.vercel.app", "http://localhost:5173"]:
+        if origin in ["https://sheria.vimtec.co.ke", "http://localhost:5173"]:
             response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Session-Id'
         response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
