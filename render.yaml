@@ -1,11 +1,18 @@
 services:
   - type: web
     name: ai-document-assistant
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
     envVars:
       - key: GROQ_API_KEY
         sync: false
       - key: FLASK_SECRET_KEY
-        sync: false 
+        sync: false
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_RUN_HOST
+        value: 0.0.0.0
+      - key: UPLOAD_FOLDER
+        value: uploads
+      - key: MAX_CONTENT_LENGTH
+        value: 16777216  # 16MB
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
