@@ -93,6 +93,11 @@ def create_app():
     return app
 
 def register_routes(app):
+    
+    @app.route('/api/health-check')
+    def health_check():
+        return jsonify({"status": "running"})
+
 
     @app.route('/')
     def index():
