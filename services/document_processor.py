@@ -278,7 +278,7 @@ class EnhancedDocumentProcessor:
             for chunk in reranked_chunks:
                 idx = self.document_chunks.index(chunk)
                 metadata = self.chunk_metadata[idx]
-                context += f"\nSource: {metadata['source']}\n{chunk}\n"
+                context += f"\n{chunk}\n"
 
             prompt = f"""As a legal expert, analyze this question based on the provided legal documents:
 
