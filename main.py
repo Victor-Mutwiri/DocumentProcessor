@@ -13,7 +13,7 @@ from utils.file_utils import (
     add_file_metadata, add_contract_file_metadata, remove_file, can_upload_more_files,
     save_files_metadata, remove_contract_file, can_upload_more_contract_files, save_contract_files_metadata
 )
-from utils.auth_utilis import authenticate_user, register_user
+from utils.auth_utilis import authenticate_user, register_user, load_users, save_users, register_admin, authenticate_admin
 from datetime import datetime
 from models import db, User, Document
 from multiprocessing import freeze_support
@@ -95,6 +95,7 @@ def create_app():
         column_list = ['id', 'name', 'created_at', 'last_login', 'is_active', 'total_documents']
         column_searchable_list = ['name']
         column_filters = ['is_active', 'created_at']
+        form_columns = ['name', 'is_active']  # Allow toggling active status in the admin panel
 
     # Document management
     class DocumentAdminView(ModelView):
@@ -159,7 +160,137 @@ def register_routes(app):
             memory_data["shared"] = memory_info.shared / (1024 ** 2)  # Shared memory in MB
 
         return jsonify(memory_data), 200
+    
+    
+    #Admin endpoints
+    @app.route('/admin/register', methods=['POST'])
+    def admin_register():
+        """Register a new admin."""
+        if request.method == 'OPTIONS':
+            return jsonify({'message': 'CORS preflight successful'}), 200
+    
+        try:
+            data = request.json
+            name = data.get('name')
+            password = data.get('password')
 
+            if not name or not password:
+                return jsonify({'error': 'Name and password are required'}), 400
+
+            admin = register_admin(name, password)
+            if admin:
+                return jsonify({'message': 'Admin registered successfully', 'admin': admin}), 201
+            else:
+                return jsonify({'error': 'Admin already exists'}), 400
+        except Exception as e:
+            logger.error(f"Error registering admin: {e}")
+            return jsonify({'error': 'Failed to register admin'}), 500
+
+
+    @app.route('/admin/login', methods=['POST'])
+    def admin_login():
+        """Login an admin."""
+        try:
+            data = request.json
+            name = data.get('name')
+            password = data.get('password')
+
+            if not name or not password:
+                return jsonify({'error': 'Name and password are required'}), 400
+
+            admin = authenticate_admin(name, password)
+            if admin:
+                session['admin_id'] = admin['id']
+                return jsonify({'message': 'Login successful', 'admin_id': admin['id']}), 200
+            else:
+                return jsonify({'error': 'Invalid credentials'}), 401
+        except Exception as e:
+            logger.error(f"Error logging in admin: {e}")
+            return jsonify({'error': 'Failed to login admin'}), 500
+    
+    @app.route('/admin/logout', methods=['POST'])
+    def admin_logout():
+        """Logout an admin by removing their session."""
+        try:
+            session.pop('admin_id', None)  # Remove the admin session
+            return jsonify({'message': 'Admin logged out successfully'}), 200
+        except Exception as e:
+            logger.error(f"Error logging out admin: {e}")
+            return jsonify({'error': 'Failed to logout admin'}), 500
+    
+    #New endpoints
+    
+    @app.route('/api/users', methods=['GET'])
+    def get_users():
+        """Fetch all users with their details, uploaded files, and contracts."""
+        try:
+            users = load_users()
+            user_data = []
+            for user in users:
+                files = get_files_metadata(user['id'])
+                contracts = get_contract_files_metadata(user['id'])
+                user_data.append({
+                    "id": user.id,
+                    "name": user.name,
+                    "is_active": user.is_active,
+                    "files": [{"filename": file['filename'], "uploaded_at": file['uploaded_at']} for file in files],
+                    "contracts": [{"filename": contract['filename'], "uploaded_at": contract['uploaded_at']} for contract in contracts]
+                })
+            return jsonify(user_data), 200
+        except Exception as e:
+            logger.error(f"Error fetching users: {e}")
+            return jsonify({"error": "Failed to fetch users"}), 500
+
+
+    @app.route('/api/users/<int:user_id>', methods=['DELETE'])
+    def delete_user(user_id):
+        """Delete a user and all associated data."""
+        try:
+            users = load_users()
+            user = next((u for u in users if u['id'] == user_id), None)
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+
+            # Delete user's files
+            files = get_files_metadata(user_id)
+            for file in files:
+                remove_file(file['filename'], user_id)
+
+            # Delete user's contracts
+            contracts = get_contract_files_metadata(user_id)
+            for contract in contracts:
+                remove_contract_file(contract['filename'], user_id)
+
+            # Remove user from the list and save
+            users = [u for u in users if u['id'] != user_id]
+            save_users(users)
+
+            return jsonify({"message": "User deleted successfully"}), 200
+        except Exception as e:
+            logger.error(f"Error deleting user: {e}")
+            return jsonify({"error": "Failed to delete user"}), 500
+
+
+    @app.route('/api/users/<int:user_id>/toggle-status', methods=['POST'])
+    def toggle_user_status(user_id):
+        """Activate or deactivate a user."""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+
+            # Toggle the user's active status
+            user.is_active = not user.is_active
+            db.session.commit()
+
+            status = "activated" if user.is_active else "deactivated"
+            return jsonify({"message": f"User {status} successfully"}), 200
+        except Exception as e:
+            logger.error(f"Error toggling user status: {e}")
+            return jsonify({"error": "Failed to toggle user status"}), 500
+
+
+#Old endpoints
 
     @app.route('/')
     def index():
