@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
@@ -17,6 +17,12 @@ from utils.auth_utilis import authenticate_user, register_user
 from datetime import datetime
 from models import db, User, Document
 from multiprocessing import freeze_support
+from flask import redirect
+from flask_session import Session
+import time
+import psutil
+import threading
+
 
 
 
@@ -34,15 +40,28 @@ def create_app():
     
     app = Flask(__name__)
     logger.debug("Flask app instance created")
-    CORS(app, supports_credentials=True)
+    CORS(app, supports_credentials=True, origins=["https://doc-processor-theta.vercel.app", "http://localhost:5173", "https://sheria.vimtec.co.ke"])
     
-    # Configuration
+    
+    #Session configuration
+    #app.config['SESSION_TYPE'] = 'filesystem'
+    #app.config['SESSION_COOKIE_SECURE'] = False  # Set to False if not using HTTPS in development
+    #app.config['SESSION_COOKIE_HTTPONLY'] = True
+    #app.config['SESSION_COOKIE_SAMESITE'] = 'None' # Use 'None' if you need cross-site requests to work
+    
+    #sess= Session()
+    #sess.init_app(app)
+    
+    # other Configuration
     app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key')
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
     app.config['UPLOAD_FOLDER'] = 'uploads'
     app.config['CONTRACT_FOLDER'] = 'contracts'
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///your_database.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    #Additional configurations
+    
     
     logger.debug("Basic configuration completed")
 
@@ -90,13 +109,56 @@ def create_app():
     
     register_routes(app)
     
+    # Start the system metrics logger in a background thread
+    threading.Thread(target=log_memory_usage, daemon=True).start()
+    
     return app
+
+def log_system_metrics():
+    """Log system metrics periodically."""
+    while True:
+        memory = psutil.virtual_memory()
+        cpu = psutil.cpu_percent(interval=1)
+        disk = psutil.disk_usage('/')
+        logger.info(f"Memory: {memory.percent}%, CPU: {cpu}%, Disk: {disk.percent}%")
+        time.sleep(60)  # Log every 60 seconds
+
+def log_memory_usage():
+    """Log memory usage of the Flask backend process periodically."""
+    process = psutil.Process(os.getpid())  # Get the current process
+    while True:
+        memory_info = process.memory_info()  # Get memory usage details
+        log_message = (
+            f"Flask Backend Memory Usage: RSS={memory_info.rss / (1024 ** 2):.2f} MB, "
+            f"VMS={memory_info.vms / (1024 ** 2):.2f} MB"
+        )
+        # Check if 'shared' attribute exists
+        if hasattr(memory_info, 'shared'):
+            log_message += f", Shared={memory_info.shared / (1024 ** 2):.2f} MB"
+        
+        logger.info(log_message)
+        time.sleep(10)  # Log every 10 seconds
 
 def register_routes(app):
     
     @app.route('/api/health-check')
     def health_check():
         return jsonify({"status": "running"})
+    
+    @app.route('/api/memory-usage', methods=['GET'])
+    def memory_usage():
+        """Get memory usage of the Flask backend process."""
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_data = {
+            "rss": memory_info.rss / (1024 ** 2),  # Resident Set Size in MB
+            "vms": memory_info.vms / (1024 ** 2),  # Virtual Memory Size in MB
+        }
+        # Check if 'shared' attribute exists
+        if hasattr(memory_info, 'shared'):
+            memory_data["shared"] = memory_info.shared / (1024 ** 2)  # Shared memory in MB
+
+        return jsonify(memory_data), 200
 
 
     @app.route('/')
