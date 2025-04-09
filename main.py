@@ -200,8 +200,9 @@ def register_routes(app):
 
             admin = authenticate_admin(name, password)
             if admin:
-                session['admin_id'] = admin['id']
-                return jsonify({'message': 'Login successful', 'admin_id': admin['id']}), 200
+                session['admin_id'] = admin['id']  # Store admin ID in the session
+                session_id = session.sid if hasattr(session, 'sid') else session['admin_id']  # Get session ID
+                return jsonify({'message': 'Login successful', 'admin_id': admin['id'], 'session_id': session_id}), 200
             else:
                 return jsonify({'error': 'Invalid credentials'}), 401
         except Exception as e:
