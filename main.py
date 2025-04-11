@@ -262,13 +262,16 @@ def register_routes(app):
         """Delete a user and all associated data."""
         try:
             # Validate the session ID
-            session_id = request.headers.get('Session-Id')
-            if not session_id:
-                return jsonify({'error': 'Unauthorized: Session ID is required'}), 401
-
-            # Check if the session ID matches an admin session
-            if 'admin_id' not in session or str(session['admin_id']) != session_id:
-                return jsonify({'error': 'Unauthorized: Invalid session ID'}), 403
+            admin_id = session.get('admin_id')           
+            # If not in session, check the header
+            if not admin_id:
+                session_id = request.headers.get('X-Session-ID')
+                # You'll need to implement a function to validate this session ID
+                # and retrieve the associated admin_id
+                admin_id = validate_session_id(session_id)
+                
+            if not admin_id:
+                return jsonify({'error': 'Unauthorized: Not logged in'}), 401
             
             
             users = load_users()
@@ -302,13 +305,16 @@ def register_routes(app):
         try:
             
             # Validate the session ID
-            session_id = request.headers.get('Session-Id')
-            if not session_id:
-                return jsonify({'error': 'Unauthorized: Session ID is required'}), 401
-
-            # Check if the session ID matches an admin session
-            if 'admin_id' not in session or str(session['admin_id']) != session_id:
-                return jsonify({'error': 'Unauthorized: Invalid session ID'}), 403
+            admin_id = session.get('admin_id')           
+            # If not in session, check the header
+            if not admin_id:
+                session_id = request.headers.get('X-Session-ID')
+                # You'll need to implement a function to validate this session ID
+                # and retrieve the associated admin_id
+                admin_id = validate_session_id(session_id)
+                
+            if not admin_id:
+                return jsonify({'error': 'Unauthorized: Not logged in'}), 401
             
             
             user = User.query.get(user_id)
