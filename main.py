@@ -13,7 +13,7 @@ from utils.file_utils import (
     add_file_metadata, add_contract_file_metadata, remove_file, can_upload_more_files,
     save_files_metadata, remove_contract_file, can_upload_more_contract_files, save_contract_files_metadata
 )
-from utils.auth_utilis import authenticate_user, register_user, load_users, save_users, register_admin, authenticate_admin
+from utils.auth_utilis import authenticate_user, register_user, load_users, save_users, register_admin, authenticate_admin, validate_session_id
 from datetime import datetime
 from models import db, User, Document
 from multiprocessing import freeze_support
@@ -85,7 +85,7 @@ def create_app():
         origin = request.headers.get('Origin')
         if origin in ["https://sheria.vimtec.co.ke", "http://localhost:5173", "https://doc-processor-theta.vercel.app"]:
             response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Session-Id'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Session-Id, X-Session-ID'
         response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
@@ -225,18 +225,32 @@ def register_routes(app):
     def get_users():
         """Fetch all users with their details, uploaded files, and contracts."""
         try:
+            # Validate the session ID
+            admin_id = session.get('admin_id')           
+            # If not in session, check the header
+            if not admin_id:
+                session_id = request.headers.get('X-Session-ID')
+                # You'll need to implement a function to validate this session ID
+                # and retrieve the associated admin_id
+                admin_id = validate_session_id(session_id)
+                
+            if not admin_id:
+                return jsonify({'error': 'Unauthorized: Not logged in'}), 401
+
+            # Load users and their metadata
             users = load_users()
             user_data = []
             for user in users:
                 files = get_files_metadata(user['id'])
                 contracts = get_contract_files_metadata(user['id'])
                 user_data.append({
-                    "id": user.id,
-                    "name": user.name,
-                    "is_active": user.is_active,
+                    "id": user['id'],
+                    "name": user['name'],
+                    "is_active": user.get('is_active', True),  # Default to True if not present
                     "files": [{"filename": file['filename'], "uploaded_at": file['uploaded_at']} for file in files],
                     "contracts": [{"filename": contract['filename'], "uploaded_at": contract['uploaded_at']} for contract in contracts]
                 })
+
             return jsonify(user_data), 200
         except Exception as e:
             logger.error(f"Error fetching users: {e}")
@@ -247,6 +261,16 @@ def register_routes(app):
     def delete_user(user_id):
         """Delete a user and all associated data."""
         try:
+            # Validate the session ID
+            session_id = request.headers.get('Session-Id')
+            if not session_id:
+                return jsonify({'error': 'Unauthorized: Session ID is required'}), 401
+
+            # Check if the session ID matches an admin session
+            if 'admin_id' not in session or str(session['admin_id']) != session_id:
+                return jsonify({'error': 'Unauthorized: Invalid session ID'}), 403
+            
+            
             users = load_users()
             user = next((u for u in users if u['id'] == user_id), None)
             if not user:
@@ -276,6 +300,17 @@ def register_routes(app):
     def toggle_user_status(user_id):
         """Activate or deactivate a user."""
         try:
+            
+            # Validate the session ID
+            session_id = request.headers.get('Session-Id')
+            if not session_id:
+                return jsonify({'error': 'Unauthorized: Session ID is required'}), 401
+
+            # Check if the session ID matches an admin session
+            if 'admin_id' not in session or str(session['admin_id']) != session_id:
+                return jsonify({'error': 'Unauthorized: Invalid session ID'}), 403
+            
+            
             user = User.query.get(user_id)
             if not user:
                 return jsonify({"error": "User not found"}), 404

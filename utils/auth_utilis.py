@@ -37,6 +37,17 @@ def register_admin(name, password):
     save_admins(admins)
     return new_admin
 
+def validate_session_id(session_id):
+    """
+    Validate the session ID and retrieve the associated admin_id.
+    """
+    admins = load_admins()
+    for admin in admins:
+        # Check if the session ID matches the admin ID
+        if str(admin['id']) == session_id:
+            return admin['id']
+    return None
+
 def load_users():
     if os.path.exists(USERS_FILE_PATH):
         with open(USERS_FILE_PATH, 'r') as f:
