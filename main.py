@@ -316,7 +316,6 @@ def register_routes(app):
             if not admin_id:
                 return jsonify({'error': 'Unauthorized: Not logged in'}), 401
             
-            
             user = User.query.get(user_id)
             if not user:
                 return jsonify({"error": "User not found"}), 404

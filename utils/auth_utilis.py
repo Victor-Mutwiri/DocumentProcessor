@@ -62,6 +62,8 @@ def authenticate_user(name, password):
     users = load_users()
     for user in users:
         if user['name'] == name and check_password_hash(user['password'], password):
+            if user.get('status', 'Active') == 'Inactive':  # Check if the user is inactive
+                return None
             return user
     return None
 
@@ -71,7 +73,7 @@ def register_user(name, password):
         return None  # User already exists
     user_id = max(user['id'] for user in users) + 1 if users else 1
     hashed_password = generate_password_hash(password)
-    new_user = {'id': user_id, 'name': name, 'password': hashed_password}
+    new_user = {'id': user_id, 'name': name, 'password': hashed_password, 'status':'Active'}
     users.append(new_user)
     save_users(users)
     return new_user
