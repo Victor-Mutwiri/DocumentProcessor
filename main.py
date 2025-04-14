@@ -316,16 +316,20 @@ def register_routes(app):
             if not admin_id:
                 return jsonify({'error': 'Unauthorized: Not logged in'}), 401
             
-            user = User.query.get(user_id)
+            users = load_users()
+            user = next((u for u in users if u['id'] == user_id), None)
             if not user:
                 return jsonify({"error": "User not found"}), 404
 
             # Toggle the user's active status
-            user.is_active = not user.is_active
-            db.session.commit()
+            current_status = user.get('status', 'Active')
+            new_status = 'Inactive' if current_status == 'Active' else 'Active'
+            user['status'] = new_status
 
-            status = "activated" if user.is_active else "deactivated"
-            return jsonify({"message": f"User {status} successfully"}), 200
+            # Save the updated users list back to users.json
+            save_users(users)
+        
+            return jsonify({"message": f"User status changed to {new_status}", "user_id": user_id, "new_status": new_status}), 200
         except Exception as e:
             logger.error(f"Error toggling user status: {e}")
             return jsonify({"error": "Failed to toggle user status"}), 500
