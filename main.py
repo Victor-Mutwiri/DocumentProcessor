@@ -11,7 +11,8 @@ from services.document_processor import EnhancedDocumentProcessor
 from utils.file_utils import (
     allowed_file, create_upload_folder, get_files_metadata, get_contract_files_metadata,
     add_file_metadata, add_contract_file_metadata, remove_file, can_upload_more_files,
-    save_files_metadata, remove_contract_file, can_upload_more_contract_files, save_contract_files_metadata
+    save_files_metadata, remove_contract_file, can_upload_more_contract_files, save_contract_files_metadata,
+    FILES_METADATA_PATH, FILES_UPLOADS_METADATA_PATH
 )
 from utils.auth_utilis import authenticate_user, register_user, load_users, save_users, register_admin, authenticate_admin, validate_session_id
 from datetime import datetime
@@ -22,6 +23,7 @@ from flask_session import Session
 import time
 import psutil
 import threading
+import json
 
 
 
@@ -243,10 +245,16 @@ def register_routes(app):
             for user in users:
                 files = get_files_metadata(user['id'])
                 contracts = get_contract_files_metadata(user['id'])
+                
+                # Check for status field first, then fall back to is_active boolean
+                status = user.get('status', 'Active')
+                if 'status' not in user and 'is_active' in user:
+                    status = 'Active' if user['is_active'] else 'Inactive'
+                
                 user_data.append({
                     "id": user['id'],
                     "name": user['name'],
-                    "is_active": user.get('is_active', True),  # Default to True if not present
+                    "is_active": status == 'Active',  # Default to True if not present
                     "files": [{"filename": file['filename'], "uploaded_at": file['uploaded_at']} for file in files],
                     "contracts": [{"filename": contract['filename'], "uploaded_at": contract['uploaded_at']} for contract in contracts]
                 })
@@ -333,6 +341,53 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error toggling user status: {e}")
             return jsonify({"error": "Failed to toggle user status"}), 500
+        
+    
+    @app.route('/api/summary', methods=['GET'])
+    def summary():
+        """Get the total number of files and contracts uploaded."""
+        try:
+            # Validate the session ID
+            admin_id = session.get('admin_id')
+            if not admin_id:
+                session_id = request.headers.get('X-Session-ID')
+                admin_id = validate_session_id(session_id)
+
+            if not admin_id:
+                return jsonify({'error': 'Unauthorized: Not logged in'}), 401
+
+            # Load files and contracts metadata
+            files_metadata = []
+            contracts_metadata = []
+
+            if os.path.exists(FILES_METADATA_PATH):
+                with open(FILES_METADATA_PATH, 'r') as f:
+                    files_metadata = json.load(f)
+
+            if os.path.exists(FILES_UPLOADS_METADATA_PATH):
+                with open(FILES_UPLOADS_METADATA_PATH, 'r') as f:
+                    contracts_metadata = json.load(f)
+
+            # Calculate totals
+            total_files = len(files_metadata)
+            total_contracts = len(contracts_metadata)
+            
+            # Load users and calculate user statistics
+            users = load_users()
+            total_users = len(users)
+            active_users = sum(1 for user in users if user.get('status', 'Active') == 'Active')
+            inactive_users = total_users - active_users
+
+            return jsonify({
+                "total_files": total_files,
+                "total_contracts": total_contracts,
+                "total_users": total_users,
+                "active_users": active_users,
+                "inactive_users": inactive_users
+            }), 200
+        except Exception as e:
+            logger.error(f"Error fetching admin summary: {e}")
+            return jsonify({"error": "Failed to fetch summary"}), 500
 
 
 #Old endpoints
