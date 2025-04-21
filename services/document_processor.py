@@ -153,8 +153,9 @@ class EnhancedDocumentProcessor:
         self.groq_api_key = os.getenv('GROQ_API_KEY')
         self.llm = ChatGroq(
             groq_api_key=self.groq_api_key,
-            model_name="llama-3.3-70b-versatile",
-            temperature=0.4
+            model_name="gemma2-9b-it",
+            temperature=0.4,
+            #model_name="llama-3.3-70b-versatile",
         )
         self.text_splitter = LegalDocumentSplitter()
         self.embeddings = LegalBERTEmbeddings()

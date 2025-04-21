@@ -67,13 +67,20 @@ def authenticate_user(name, password):
             return user
     return None
 
-def register_user(name, password):
+def register_user(username, email, password, password_hint):
     users = load_users()
-    if any(user['name'] == name for user in users):
-        return None  # User already exists
+    if any(user['email'] == email for user in users):
+        return None  # User with the same email already exists
     user_id = max(user['id'] for user in users) + 1 if users else 1
     hashed_password = generate_password_hash(password)
-    new_user = {'id': user_id, 'name': name, 'password': hashed_password, 'status':'Active'}
+    new_user = {
+        'id': user_id,
+        'username': username,
+        'email': email,
+        'password': hashed_password,
+        'password_hint': password_hint,
+        'status': 'Active'  # Default status is Active
+    }
     users.append(new_user)
     save_users(users)
     return new_user

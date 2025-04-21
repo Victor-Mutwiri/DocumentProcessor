@@ -413,15 +413,50 @@ def register_routes(app):
 
     @app.route('/register', methods=['POST'])
     def register():
-        data = request.json
-        name = data.get('name')
-        password = data.get('password')
-        user = register_user(name, password)
-        if user:
-            session['user_id'] = user['id']
-            session['session_id'] = str(user['id'])  # Set session ID to user ID
-            return jsonify({'message': 'Registration successful', 'session_id': session['session_id']})
-        return jsonify({'error': 'User already exists'}), 400
+        """Register a new user with username, email, password, and password hint."""
+        try:
+            data = request.json
+            username = data.get('username')
+            email = data.get('email')
+            password = data.get('password')
+            password_hint = data.get('password_hint')
+
+            if not username or not email or not password or not password_hint:
+                return jsonify({'error': 'All fields (username, email, password, password_hint) are required'}), 400
+
+            # Register the user
+            user = register_user(username, email, password, password_hint)
+            if user:
+                session['user_id'] = user['id']
+                session['session_id'] = str(user['id'])  # Set session ID to user ID
+                return jsonify({'message': 'Registration successful', 'session_id': session['session_id']}), 201
+            return jsonify({'error': 'User already exists'}), 400
+        except Exception as e:
+            logger.error(f"Error registering user: {e}")
+            return jsonify({'error': 'Failed to register user'}), 500
+        
+    @app.route('/recover-password', methods=['POST'])
+    def recover_password():
+        """Recover a user's password using their password hint."""
+        try:
+            data = request.json
+            email = data.get('email')
+            password_hint = data.get('password_hint')
+
+            if not email or not password_hint:
+                return jsonify({'error': 'Email and password hint are required'}), 400
+
+            # Load users and find the matching user
+            users = load_users()
+            user = next((u for u in users if u['email'] == email and u['password_hint'] == password_hint), None)
+
+            if not user:
+                return jsonify({'error': 'Invalid email or password hint'}), 404
+
+            return jsonify({'message': 'Password recovery successful', 'password': user['password']}), 200
+        except Exception as e:
+            logger.error(f"Error recovering password: {e}")
+            return jsonify({'error': 'Failed to recover password'}), 500
 
     @app.route('/logout')
     def logout():
