@@ -975,6 +975,57 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error fetching account summary: {e}")
             return jsonify({'error': 'Failed to fetch account summary'}), 500
+        
+    @app.route('/api/delete-account', methods=['DELETE'])
+    def delete_account():
+        """Delete a user's account and all associated data."""
+        session_id = request.headers.get('Session-Id')
+        if not session_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        # Set user_id based on session_id
+        session['user_id'] = session_id
+
+        try:
+            # Load users and find the matching user
+            users = load_users()
+            user = next((u for u in users if str(u['id']) == session['user_id']), None)
+
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+
+            user_id = user['id']
+
+            # Delete user's files
+            files_metadata = get_files_metadata(user_id)
+            for file in files_metadata:
+                filepath = file['filepath']
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            # Remove user's files metadata
+            save_files_metadata([], user_id)
+
+            # Delete user's contracts
+            contracts_metadata = get_contract_files_metadata(user_id)
+            for contract in contracts_metadata:
+                filepath = contract['filepath']
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            # Remove user's contracts metadata
+            save_contract_files_metadata([], user_id)
+
+            # Remove user from the users.json file
+            users = [u for u in users if u['id'] != user_id]
+            save_users(users)
+
+            # Clear session
+            session.pop('user_id', None)
+            session.pop('session_id', None)
+
+            return jsonify({'message': 'Account deleted successfully'}), 200
+        except Exception as e:
+            logger.error(f"Error deleting account: {e}")
+            return jsonify({'error': 'Failed to delete account'}), 500
 
 def main():
     logger.info("Starting main application")
