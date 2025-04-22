@@ -923,6 +923,58 @@ def register_routes(app):
         except Exception as e:
             print(f"Error fetching files metadata: {str(e)}")
             return jsonify({'error': str(e)}), 500
+        
+    @app.route('/api/account-summary', methods=['GET'])
+    def account_summary():
+        """Provide a summary of the user's account."""
+        session_id = request.headers.get('Session-Id')
+        if not session_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        # Set user_id based on session_id
+        session['user_id'] = session_id
+
+        try:
+            # Fetch user data
+            users = load_users()
+            user = next((u for u in users if str(u['id']) == session['user_id']), None)
+
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+
+            # Fetch files and contracts metadata
+            files_metadata = get_files_metadata(user['id'])
+            contracts_metadata = get_contract_files_metadata(user['id'])
+
+            # Prepare the summary
+            account_summary = {
+                "username": user['username'],
+                "email": user['email'],
+                "password_hint": user['password_hint'],
+                "files": [
+                    {
+                        "filename": file['filename'],
+                        "uploaded_at": file['uploaded_at'],
+                        "active": file.get('active', False)
+                    }
+                    for file in files_metadata
+                ],
+                "contracts": [
+                    {
+                        "filename": contract['filename'],
+                        "uploaded_at": contract['uploaded_at'],
+                        "active": contract.get('active', False)
+                    }
+                    for contract in contracts_metadata
+                ],
+                "total_files": len(files_metadata),
+                "total_contracts": len(contracts_metadata)
+            }
+
+            return jsonify(account_summary), 200
+        except Exception as e:
+            logger.error(f"Error fetching account summary: {e}")
+            return jsonify({'error': 'Failed to fetch account summary'}), 500
 
 def main():
     logger.info("Starting main application")
