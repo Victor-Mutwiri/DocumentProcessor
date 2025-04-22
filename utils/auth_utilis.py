@@ -58,13 +58,19 @@ def save_users(users):
     with open(USERS_FILE_PATH, 'w') as f:
         json.dump(users, f)
 
-def authenticate_user(name, password):
+def authenticate_user(username, password):
     users = load_users()
     for user in users:
-        if user['name'] == name and check_password_hash(user['password'], password):
+        print(f"Authenticating user: {username}")  # Debug log
+        print(f"Stored username: {user['username']}")  # Debug log
+        print(f"Stored password hash: {user['password']}")  # Debug log
+        if user['username'] == username and check_password_hash(user['password'], password):
             if user.get('status', 'Active') == 'Inactive':  # Check if the user is inactive
+                print("User is inactive")  # Debug log
                 return None
+            print("Authentication successful")  # Debug log
             return user
+    print("Authentication failed")  # Debug log
     return None
 
 def register_user(username, email, password, password_hint):

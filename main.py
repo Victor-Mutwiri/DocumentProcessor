@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_sqlalchemy import SQLAlchemy
@@ -24,6 +25,8 @@ import time
 import psutil
 import threading
 import json
+import random
+import string
 
 
 
@@ -253,7 +256,8 @@ def register_routes(app):
                 
                 user_data.append({
                     "id": user['id'],
-                    "name": user['name'],
+                    "username": user['username'],
+                    "hint":user['password_hint'],
                     "is_active": status == 'Active',  # Default to True if not present
                     "files": [{"filename": file['filename'], "uploaded_at": file['uploaded_at']} for file in files],
                     "contracts": [{"filename": contract['filename'], "uploaded_at": contract['uploaded_at']} for contract in contracts]
@@ -402,9 +406,9 @@ def register_routes(app):
     @app.route('/login', methods=['POST'])
     def login():
         data = request.json
-        name = data.get('name')
+        username = data.get('username')
         password = data.get('password')
-        user = authenticate_user(name, password)
+        user = authenticate_user(username, password)
         if user:
             session['user_id'] = user['id']
             session['session_id'] = str(user['id'])  # Set session ID to user ID
@@ -424,13 +428,18 @@ def register_routes(app):
             if not username or not email or not password or not password_hint:
                 return jsonify({'error': 'All fields (username, email, password, password_hint) are required'}), 400
 
+            # Check if the email is already registered
+            users = load_users()
+            if any(user['email'] == email for user in users):
+                return jsonify({'error': 'This email is already registered. Please log in instead.'}), 400
+
             # Register the user
             user = register_user(username, email, password, password_hint)
             if user:
                 session['user_id'] = user['id']
                 session['session_id'] = str(user['id'])  # Set session ID to user ID
                 return jsonify({'message': 'Registration successful', 'session_id': session['session_id']}), 201
-            return jsonify({'error': 'User already exists'}), 400
+            return jsonify({'error': 'Failed to register user'}), 500
         except Exception as e:
             logger.error(f"Error registering user: {e}")
             return jsonify({'error': 'Failed to register user'}), 500
@@ -453,10 +462,51 @@ def register_routes(app):
             if not user:
                 return jsonify({'error': 'Invalid email or password hint'}), 404
 
-            return jsonify({'message': 'Password recovery successful', 'password': user['password']}), 200
+            # Generate a new temporary password
+            new_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+            hashed_password = generate_password_hash(new_password)
+
+            # Update the user's password in the users.json file
+            user['password'] = hashed_password
+            save_users(users)
+
+            return jsonify({'message': 'Password recovery successful', 'new_password': new_password}), 200
         except Exception as e:
             logger.error(f"Error recovering password: {e}")
             return jsonify({'error': 'Failed to recover password'}), 500
+        
+    @app.route('/change-password', methods=['POST'])
+    def change_password():
+        """Allow users to change their password."""
+        try:
+            data = request.json
+            email = data.get('email')
+            current_password = data.get('current_password')
+            new_password = data.get('new_password')
+
+            if not email or not current_password or not new_password:
+                return jsonify({'error': 'Email, current password, and new password are required'}), 400
+
+            # Load users and find the matching user
+            users = load_users()
+            user = next((u for u in users if u['email'] == email), None)
+
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+
+            # Verify the current password
+            if not check_password_hash(user['password'], current_password):
+                return jsonify({'error': 'Invalid current password'}), 401
+
+            # Hash the new password and update the user's password
+            hashed_new_password = generate_password_hash(new_password)
+            user['password'] = hashed_new_password
+            save_users(users)
+
+            return jsonify({'message': 'Password changed successfully'}), 200
+        except Exception as e:
+            logger.error(f"Error changing password: {e}")
+            return jsonify({'error': 'Failed to change password'}), 500
 
     @app.route('/logout')
     def logout():
