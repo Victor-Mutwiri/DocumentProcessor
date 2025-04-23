@@ -95,6 +95,8 @@ class LegalBERTEmbeddings:
         except Exception as e:
             print(f"Error initializing LegalBERTEmbeddings: {str(e)}")
             raise
+        
+    
 
     def preprocess_text(self, text: str) -> str:
         """Enhanced preprocessing for legal text"""
@@ -151,18 +153,61 @@ class LegalBERTEmbeddings:
 class EnhancedDocumentProcessor:
     def __init__(self):
         self.groq_api_key = os.getenv('GROQ_API_KEY')
-        self.llm = ChatGroq(
+        self.load_model()
+        
+        """ self.llm = ChatGroq(
             groq_api_key=self.groq_api_key,
-            model_name="gemma2-9b-it",
+            model_name="llama-3.3-70b-versatile",
             temperature=0.4,
-            #model_name="llama-3.3-70b-versatile",
-        )
+            #model_name="deepseek-r1-distill-llama-70b",
+            #model_name="gemma2-9b-it",
+        ) """
         self.text_splitter = LegalDocumentSplitter()
         self.embeddings = LegalBERTEmbeddings()
         self.document_chunks = []
         self.chunk_embeddings = None
         self.index = None
         self.chunk_metadata = []
+        
+    def load_model(self):
+        """Load the model dynamically from the config file."""
+        try:
+            with open('services/config.json', 'r') as f:
+                config = json.load(f)
+                model_name = config.get('model_name', 'llama-3.3-70b-versatile')
+                supported_models = config.get('supported_models', [])
+
+                if model_name not in supported_models:
+                    raise ValueError(f"Model name '{model_name}' is not supported. Supported models are: {', '.join(supported_models)}")
+
+                self.llm = ChatGroq(
+                    groq_api_key=self.groq_api_key,
+                    model_name=model_name,
+                    temperature=0.4
+                )
+                print(f"Model loaded: {model_name}")
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            raise
+
+    def update_model(self, model_name):
+        """Update the model name and reload the model."""
+        try:
+            # Update the config file
+            with open('services/config.json', 'r') as f:
+                config = json.load(f)
+
+            config['model_name'] = model_name
+
+            with open('services/config.json', 'w') as f:
+                json.dump(config, f, indent=4)
+
+            # Reload the model
+            self.load_model()
+            print(f"Model updated to: {model_name}")
+        except Exception as e:
+            print(f"Error updating model: {e}")
+            raise
         
     def clear_document_state(self):
         """Clear the document state."""

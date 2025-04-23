@@ -1,0 +1,8 @@
+{
+    "model_name": "gemma2-9b-it",
+    "supported_models": [
+        "llama-3.3-70b-versatile",
+        "deepseek-r1-distill-llama-70b",
+        "gemma2-9b-it"
+    ]
+}

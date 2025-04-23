@@ -223,6 +223,58 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error logging out admin: {e}")
             return jsonify({'error': 'Failed to logout admin'}), 500
+        
+    
+    @app.route('/admin/update-model', methods=['GET', 'POST'])
+    def update_model():
+        """Update the model name dynamically or fetch the list of supported models."""
+        try:
+            if request.method == 'GET':
+                # Load the list of supported models from config.json
+                with open('services/config.json', 'r') as f:
+                    config = json.load(f)
+                    supported_models = config.get('supported_models', [])
+                    current_model = config.get('model_name', 'llama-3.3-70b-versatile')
+
+                return jsonify({
+                    'current_model': current_model,
+                    'supported_models': supported_models
+                }), 200
+
+            elif request.method == 'POST':
+                # Validate admin session
+                admin_id = session.get('admin_id')
+                if not admin_id:
+                    session_id = request.headers.get('X-Session-ID')
+                    # You'll need to implement a function to validate this session ID
+                    # and retrieve the associated admin_id
+                    admin_id = validate_session_id(session_id)
+                    
+                if not admin_id:
+                    return jsonify({'error': 'Unauthorized: Not logged in'}), 401
+
+                data = request.json
+                model_name = data.get('model_name')
+
+                if not model_name:
+                    return jsonify({'error': 'Model name is required'}), 400
+
+                # Load the list of supported models from config.json
+                with open('services/config.json', 'r') as f:
+                    config = json.load(f)
+                    supported_models = config.get('supported_models', [])
+
+                if model_name not in supported_models:
+                    return jsonify({'error': f'Model name "{model_name}" is not supported. Supported models are: {", ".join(supported_models)}'}), 400
+
+                # Update the model in the document processor
+                document_processor.update_model(model_name)
+
+                return jsonify({'message': f'Model updated to {model_name}'}), 200
+
+        except Exception as e:
+            logger.error(f"Error in update_model endpoint: {e}")
+            return jsonify({'error': 'Failed to process request'}), 500
     
     #New endpoints
     
